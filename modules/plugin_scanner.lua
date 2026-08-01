@@ -292,6 +292,7 @@ local function parse_all_vst_ini(res_path, plugins, snapshot_map, fxtag_cats, fx
               name = clean_display,
               full_name = name,
               raw_key = key,
+              file_path = key,
               vendor = vendor,
               type = p_type,
               category = category,
@@ -333,6 +334,7 @@ local function parse_all_au_ini(res_path, plugins, snapshot_map, fxtag_cats, fxt
               name = clean_display,
               full_name = name,
               raw_key = key,
+              file_path = key,
               vendor = vendor,
               type = "AU",
               category = category,
@@ -355,6 +357,7 @@ local function parse_all_clap_ini(res_path, plugins, snapshot_map, fxtag_cats, f
     if f then
       for line in f:lines() do
         if line:find("| ") then
+          local clap_file = line:match("^(.-)%|") or line
           local name = line:match("|%s*(.-)$") or line
           local raw_name = name:gsub("%s*!%s*!%s*!.*$", "")
           local vendor = fxtag_vendors[raw_name:lower()] or raw_name:match("%((.-)%)") or "CLAP"
@@ -370,6 +373,7 @@ local function parse_all_clap_ini(res_path, plugins, snapshot_map, fxtag_cats, f
               name = clean_display,
               full_name = raw_name,
               raw_key = line,
+              file_path = clap_file,
               vendor = vendor,
               type = "CLAP",
               category = category,

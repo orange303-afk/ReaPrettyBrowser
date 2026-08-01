@@ -296,4 +296,71 @@ function Config.import_all_settings(file_path)
   return true
 end
 
+-- Plugin Run As execution mode (0=Default, 1=In-process, 2=Separate, 3=Dedicated)
+function Config.get_plugin_run_as(ident)
+  local map_str = get_ext("plugin_run_as", "")
+  local val = map_str:match(ident .. "=(%d)")
+  return val and tonumber(val) or 0
+end
+
+function Config.save_plugin_run_as(ident, mode)
+  local map_str = get_ext("plugin_run_as", "")
+  local map = {}
+  for item in map_str:gmatch("[^;]+") do
+    local k, v = item:match("^([^=]+)=(%d)$")
+    if k and v then map[k] = tonumber(v) end
+  end
+  map[ident] = mode
+  
+  local list = {}
+  for k, v in pairs(map) do
+    if v and v > 0 then
+      table.insert(list, k .. "=" .. tostring(v))
+    end
+  end
+  save_ext("plugin_run_as", table.concat(list, ";"))
+end
+
+-- Plugin Compatibility Settings
+function Config.get_plugin_compat(ident)
+  local map_str = get_ext("plugin_compat", "")
+  local res = {}
+  for item in map_str:gmatch("[^;]+") do
+    local k, flags = item:match("^([^=]+)=(.*)$")
+    if k == ident and flags then
+      for flag in flags:gmatch("[^,]+") do
+        res[flag] = true
+      end
+    end
+  end
+  return res
+end
+
+function Config.toggle_plugin_compat(ident, flag_key)
+  local map_str = get_ext("plugin_compat", "")
+  local map = {}
+  for item in map_str:gmatch("[^;]+") do
+    local k, flags = item:match("^([^=]+)=(.*)$")
+    if k and flags then
+      map[k] = {}
+      for f in flags:gmatch("[^,]+") do map[k][f] = true end
+    end
+  end
+
+  if not map[ident] then map[ident] = {} end
+  map[ident][flag_key] = not map[ident][flag_key]
+
+  local list = {}
+  for k, set in pairs(map) do
+    local flist = {}
+    for f, active in pairs(set) do
+      if active then table.insert(flist, f) end
+    end
+    if #flist > 0 then
+      table.insert(list, k .. "=" .. table.concat(flist, ","))
+    end
+  end
+  save_ext("plugin_compat", table.concat(list, ";"))
+end
+
 return Config

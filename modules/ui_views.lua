@@ -289,6 +289,46 @@ local function paste_thumbnail_from_clipboard(plugin, state)
   end
 end
 
+-- Reveal plugin file or plugin folder in OS File Explorer / Finder
+local function reveal_plugin_in_explorer(plugin)
+  if not plugin then return end
+
+  local raw = plugin.file_path or plugin.raw_key or ""
+  local clean_path = raw:match("^([^,=]+)") or raw
+  clean_path = clean_path:gsub("^VST3:%s*", ""):gsub("^VST:%s*", ""):gsub("^AU:%s*", ""):gsub("^CLAP:%s*", "")
+
+  local target_folder = ""
+
+  if file_exists(clean_path) then
+    target_folder = clean_path:match("^(.*)[/\\]")
+  else
+    local os_name = reaper.GetOS()
+    if os_name:sub(1, 3) == "Win" then
+      if plugin.type == "VST3" then
+        target_folder = "C:\\Program Files\\Common Files\\VST3"
+      elseif plugin.type == "CLAP" then
+        target_folder = "C:\\Program Files\\Common Files\\CLAP"
+      else
+        target_folder = "C:\\Program Files\\VstPlugins"
+      end
+    else
+      if plugin.type == "AU" then
+        target_folder = "/Library/Audio/Plug-Ins/Components"
+      elseif plugin.type == "VST3" then
+        target_folder = "/Library/Audio/Plug-Ins/VST3"
+      elseif plugin.type == "CLAP" then
+        target_folder = "/Library/Audio/Plug-Ins/CLAP"
+      elseif plugin.type == "JS" then
+        target_folder = reaper.GetResourcePath() .. "/Effects"
+      else
+        target_folder = "/Library/Audio/Plug-Ins/VST"
+      end
+    end
+  end
+
+  open_in_explorer(target_folder)
+end
+
 -- Helper to insert FX on a specific REAPER track
 local function insert_plugin_to_track(track, plugin)
   if not track or not plugin then return false end
@@ -320,6 +360,20 @@ local function insert_plugin_to_track(track, plugin)
   end
 
   if fx_index >= 0 then
+    local run_as = Config.get_plugin_run_as(plugin.ident)
+    if run_as and run_as > 0 then
+      reaper.TrackFX_SetNamedConfigParm(track, fx_index, "run_as", tostring(run_as))
+    end
+
+    local compat = Config.get_plugin_compat(plugin.ident)
+    if compat then
+      for key, active in pairs(compat) do
+        if active then
+          reaper.TrackFX_SetNamedConfigParm(track, fx_index, key, "1")
+        end
+      end
+    end
+
     reaper.TrackFX_Show(track, fx_index, 3)
     reaper.Undo_EndBlock("ReaPrettyBrowser: Add " .. plugin.name, -1)
     return true
@@ -893,6 +947,80 @@ function UIViews.draw_plugin_grid(ctx, state)
           end
 
           reaper.ImGui_Separator(ctx)
+
+          -- Run As Submenu
+          if reaper.ImGui_BeginMenu(ctx, "🖥️ Run as") then
+            local current_run_as = Config.get_plugin_run_as(plugin.ident)
+            local modes = {
+              { label = "Default", val = 0 },
+              { label = "In-process (native)", val = 1 },
+              { label = "Separate process", val = 2 },
+              { label = "Dedicated process", val = 3 },
+            }
+            for _, m in ipairs(modes) do
+              local is_sel = (current_run_as == m.val)
+              if reaper.ImGui_MenuItem(ctx, m.label, nil, is_sel) then
+                for _, p in ipairs(selected_list) do
+                  Config.save_plugin_run_as(p.ident, m.val)
+                  if p.uid then Config.save_plugin_run_as(p.uid, m.val) end
+                  if p.full_name then Config.save_plugin_run_as(p.full_name, m.val) end
+                end
+
+                local track = reaper.GetSelectedTrack(0, 0)
+                if track then
+                  for k = 0, reaper.TrackFX_GetCount(track) - 1 do
+                    local _, fx_name = reaper.TrackFX_GetFXName(track, k, "")
+                    if fx_name:lower():find(plugin.name:lower(), 1, true) then
+                      reaper.TrackFX_SetNamedConfigParm(track, k, "run_as", tostring(m.val))
+                    end
+                  end
+                end
+              end
+            end
+            reaper.ImGui_EndMenu(ctx)
+          end
+
+          -- Compatibility Settings Submenu
+          if reaper.ImGui_BeginMenu(ctx, "⚙️ Compatibility settings") then
+            local compat = Config.get_plugin_compat(plugin.ident)
+            local items = {
+              { label = "Save minimal undo states", key = "compat_minimal_undo" },
+              { label = "Bypass graphics hardware acceleration", key = "compat_no_accel" },
+              { label = "Buggy plugin compatibility mode", key = "compat_buggy_mode" },
+              { label = "Hard reset on playback start", key = "compat_hard_reset" },
+              { label = "Do not process audio when silent", key = "compat_silent_bypass" },
+            }
+            for _, item in ipairs(items) do
+              local active = compat[item.key] == true
+              if reaper.ImGui_MenuItem(ctx, item.label, nil, active) then
+                local new_val = not active
+                for _, p in ipairs(selected_list) do
+                  Config.toggle_plugin_compat(p.ident, item.key)
+                  if p.uid then Config.toggle_plugin_compat(p.uid, item.key) end
+                  if p.full_name then Config.toggle_plugin_compat(p.full_name, item.key) end
+                end
+
+                local track = reaper.GetSelectedTrack(0, 0)
+                if track then
+                  for k = 0, reaper.TrackFX_GetCount(track) - 1 do
+                    local _, fx_name = reaper.TrackFX_GetFXName(track, k, "")
+                    if fx_name:lower():find(plugin.name:lower(), 1, true) then
+                      reaper.TrackFX_SetNamedConfigParm(track, k, item.key, new_val and "1" or "0")
+                    end
+                  end
+                end
+              end
+            end
+            reaper.ImGui_EndMenu(ctx)
+          end
+
+          reaper.ImGui_Separator(ctx)
+          local os_name = reaper.GetOS()
+          local reveal_label = (os_name:sub(1, 3) == "Win") and "📂 Reveal in Explorer" or "📂 Reveal in Finder"
+          if reaper.ImGui_MenuItem(ctx, reveal_label) then
+            reveal_plugin_in_explorer(plugin)
+          end
+
           if reaper.ImGui_MenuItem(ctx, "🖼️ Assign custom thumbnail...") then
             state.assign_target_plugin = plugin
             state.custom_thumb_input = plugin.snapshot_path or ""
