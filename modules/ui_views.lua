@@ -289,6 +289,17 @@ local function paste_thumbnail_from_clipboard(plugin, state)
   end
 end
 
+-- Open folder in OS File Explorer / Finder
+local function open_in_explorer(folder_path)
+  if not folder_path or folder_path == "" then return end
+  local os_name = reaper.GetOS()
+  if os_name:sub(1, 3) == "Win" then
+    os.execute('explorer "' .. folder_path:gsub("/", "\\") .. '"')
+  else
+    os.execute('open "' .. folder_path .. '"')
+  end
+end
+
 -- Reveal plugin file or plugin folder in OS File Explorer / Finder
 local function reveal_plugin_in_explorer(plugin)
   if not plugin then return end
@@ -437,17 +448,6 @@ local function insert_selected_plugins(state, filtered, target_track)
 
   for _, p in ipairs(list) do
     insert_plugin_to_track(track, p)
-  end
-end
-
--- Open folder in OS File Explorer / Finder
-local function open_in_explorer(folder_path)
-  if not folder_path or folder_path == "" then return end
-  local os_name = reaper.GetOS()
-  if os_name:sub(1, 3) == "Win" then
-    os.execute('explorer "' .. folder_path:gsub("/", "\\") .. '"')
-  else
-    os.execute('open "' .. folder_path .. '"')
   end
 end
 
