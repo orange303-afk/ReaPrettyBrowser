@@ -340,9 +340,25 @@ local function reveal_plugin_in_explorer(plugin)
   open_in_explorer(target_folder)
 end
 
+local function is_default_or_unnamed_track_name(name)
+  if not name or name:match("^%s*$") then
+    return true
+  end
+  local lower = name:lower():match("^%s*(.-)%s*$")
+  if lower == "track" or lower:match("^track[ %-_#]*%d*[%:%.]*$")
+     or lower == "трек" or lower:match("^трек[ %-_#]*%d*[%:%.]*$") then
+    return true
+  end
+  return false
+end
+
 -- Helper to insert FX on a specific REAPER track
 local function insert_plugin_to_track(track, plugin)
   if not track or not plugin then return false end
+
+  local fx_count_before = reaper.TrackFX_GetCount(track)
+  local _, current_name = reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)
+  local is_unnamed = is_default_or_unnamed_track_name(current_name)
 
   reaper.Undo_BeginBlock()
 
@@ -371,6 +387,13 @@ local function insert_plugin_to_track(track, plugin)
   end
 
   if fx_index >= 0 then
+    -- Rename track if it was empty (0 FX before insertion) and unnamed/default-named
+    if fx_count_before == 0 and is_unnamed and plugin.name and plugin.name ~= "" then
+      reaper.GetSetMediaTrackInfo_String(track, "P_NAME", plugin.name, true)
+      reaper.TrackList_AdjustWindows(false)
+      reaper.UpdateArrange()
+    end
+
     local run_as = Config.get_plugin_run_as(plugin.ident)
     if run_as and run_as > 0 then
       reaper.TrackFX_SetNamedConfigParm(track, fx_index, "run_as", tostring(run_as))
@@ -395,12 +418,15 @@ local function insert_plugin_to_track(track, plugin)
 end
 
 -- Create a new REAPER track configured with MIDI: ALL Input, Record: input (audio or MIDI), & Stereo Output
-local function create_configured_track()
+local function create_configured_track(name)
   local track_idx = reaper.CountTracks(0)
   reaper.InsertTrackAtIndex(track_idx, true)
   local track = reaper.GetTrack(0, track_idx)
 
   if track then
+    if name and name ~= "" then
+      reaper.GetSetMediaTrackInfo_String(track, "P_NAME", name, true)
+    end
     reaper.SetOnlyTrackSelected(track)
     reaper.SetMediaTrackInfo_Value(track, "I_RECINPUT", 6112)
     reaper.SetMediaTrackInfo_Value(track, "I_RECMODE", 0) -- Record: input (audio or MIDI)
@@ -408,6 +434,8 @@ local function create_configured_track()
     reaper.SetMediaTrackInfo_Value(track, "I_RECMON", 1)
     reaper.SetMediaTrackInfo_Value(track, "I_NCHAN", 2)
     reaper.SetMediaTrackInfo_Value(track, "B_MAINSEND", 1)
+    reaper.TrackList_AdjustWindows(false)
+    reaper.UpdateArrange()
   end
 
   return track
@@ -441,9 +469,10 @@ local function insert_selected_plugins(state, filtered, target_track)
   local list = get_selected_plugin_list(state, filtered)
   if #list == 0 then return end
 
+  local first_name = list[1] and list[1].name
   local track = target_track or reaper.GetSelectedTrack(0, 0)
   if not track then
-    track = create_configured_track()
+    track = create_configured_track(first_name)
   end
 
   for _, p in ipairs(list) do
@@ -1218,15 +1247,17 @@ function UIViews.draw_plugin_grid(ctx, state)
     end
 
     -- Check if user dropped dragged plugin(s) onto a REAPER track or arrange view
-    if (state.dragging_plugin or state.dragging_plugins) and reaper.ImGui_IsMouseReleased(ctx, 0) then
+    if (state.dragging_plugin or state.dragging_plugins) and (reaper.ImGui_IsMouseReleased(ctx, 0) or not reaper.ImGui_IsMouseDown(ctx, 0)) then
       local mx, my = reaper.GetMousePosition()
       local track, info = reaper.GetTrackFromPoint(mx, my)
 
+      local list = state.dragging_plugins or { state.dragging_plugin }
+      local first_plugin = list[1]
+
       if not track then
-        track = create_configured_track()
+        track = create_configured_track(first_plugin and first_plugin.name)
       end
 
-      local list = state.dragging_plugins or { state.dragging_plugin }
       for _, p in ipairs(list) do
         insert_plugin_to_track(track, p)
       end
