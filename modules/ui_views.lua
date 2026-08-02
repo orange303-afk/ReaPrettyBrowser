@@ -417,7 +417,7 @@ local function insert_plugin_to_track(track, plugin)
   return false
 end
 
--- Create a new REAPER track configured with MIDI: ALL Input, Record: input (audio or MIDI), & Stereo Output
+-- Create a new REAPER track configured with MIDI: ALL Input, Record: input, Stereo Output & Input Quantize (1/16, note-offs)
 local function create_configured_track(name)
   local track_idx = reaper.CountTracks(0)
   reaper.InsertTrackAtIndex(track_idx, true)
@@ -434,6 +434,19 @@ local function create_configured_track(name)
     reaper.SetMediaTrackInfo_Value(track, "I_RECMON", 1)
     reaper.SetMediaTrackInfo_Value(track, "I_NCHAN", 2)
     reaper.SetMediaTrackInfo_Value(track, "B_MAINSEND", 1)
+
+    -- Configure Input Quantize: Enabled (1), Nearest (0), Note-offs enabled (1), 1/16 grid (0.25), Strength 100%
+    local ret, chunk = reaper.GetTrackStateChunk(track, "", false)
+    if ret and chunk then
+      local inq_str = "INQ 1 0 1 0.25 100 0 0 100"
+      if chunk:find("INQ ") then
+        chunk = chunk:gsub("INQ [^\n\r]+", inq_str)
+      else
+        chunk = chunk:gsub("(\nREC [^\n\r]+)", "%1\n" .. inq_str)
+      end
+      reaper.SetTrackStateChunk(track, chunk, false)
+    end
+
     reaper.TrackList_AdjustWindows(false)
     reaper.UpdateArrange()
   end
