@@ -97,6 +97,6 @@ local function loop()
   end
 end
 
--- Create Context & Run
-ctx = reaper.ImGui_CreateContext('Plugins')
+-- Create Context with Docking Enabled & Run
+ctx = reaper.ImGui_CreateContext('Plugins', reaper.ImGui_ConfigFlags_DockingEnable())
 reaper.defer(loop)

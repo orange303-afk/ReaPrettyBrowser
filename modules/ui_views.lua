@@ -394,7 +394,7 @@ local function insert_plugin_to_track(track, plugin)
   return false
 end
 
--- Create a new REAPER track configured with MIDI: ALL Input, Record: output (stereo), & Stereo Output
+-- Create a new REAPER track configured with MIDI: ALL Input, Record: input (audio or MIDI), & Stereo Output
 local function create_configured_track()
   local track_idx = reaper.CountTracks(0)
   reaper.InsertTrackAtIndex(track_idx, true)
@@ -403,7 +403,7 @@ local function create_configured_track()
   if track then
     reaper.SetOnlyTrackSelected(track)
     reaper.SetMediaTrackInfo_Value(track, "I_RECINPUT", 6112)
-    reaper.SetMediaTrackInfo_Value(track, "I_RECMODE", 1)
+    reaper.SetMediaTrackInfo_Value(track, "I_RECMODE", 0) -- Record: input (audio or MIDI)
     reaper.SetMediaTrackInfo_Value(track, "I_RECARM", 1)
     reaper.SetMediaTrackInfo_Value(track, "I_RECMON", 1)
     reaper.SetMediaTrackInfo_Value(track, "I_NCHAN", 2)
@@ -689,7 +689,7 @@ function UIViews.draw_plugin_grid(ctx, state)
 
     -- Always single column, width auto-scaling with docker width
     local columns = 1
-    local card_w = math.max(120, avail_w - 4)
+    local card_w = math.max(120, avail_w)
     local card_h = math.min(500, math.max(160, card_w * 0.55))
 
     -- Filter & Sort plugins list
@@ -1255,6 +1255,8 @@ function UIViews.draw_statusbar(ctx, state)
   local status_text = string.format("Total Plugins: %d  |  Favorites: %d  |  Selected: %d", 
     #state.plugins, fav_count, sel_count)
   
+  local start_x = reaper.ImGui_GetCursorPosX(ctx)
+  reaper.ImGui_SetCursorPosX(ctx, start_x + 28)
   reaper.ImGui_TextColored(ctx, UITheme.COLORS.TextMuted, status_text)
 end
 

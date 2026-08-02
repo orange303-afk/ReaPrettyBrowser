@@ -59,6 +59,11 @@ function UITheme.sync_reaper_theme()
 
     local target_bg = dock_bg or main_bg
     if target_bg then
+      -- If dock_bg is pure black (0x000000FF), prefer main_bg if main_bg is non-black
+      if target_bg == 0x000000FF and main_bg and main_bg ~= 0x000000FF then
+        target_bg = main_bg
+      end
+
       COLORS.WindowBg = target_bg
       COLORS.ChildBg = target_bg
       COLORS.PopupBg = target_bg
@@ -106,6 +111,7 @@ function UITheme.push_theme(ctx)
   reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_WindowBg(),             COLORS.WindowBg)
   reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ChildBg(),              COLORS.ChildBg)
   reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_PopupBg(),              COLORS.PopupBg)
+  reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_DockingEmptyBg(),       COLORS.WindowBg)
   reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_FrameBg(),              COLORS.FrameBg)
   reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_FrameBgHovered(),       COLORS.FrameBgHovered)
   reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_FrameBgActive(),        COLORS.FrameBgActive)
@@ -122,17 +128,20 @@ function UITheme.push_theme(ctx)
   reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ScrollbarGrabHovered(), COLORS.ScrollbarGrabHovered)
   reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ScrollbarGrabActive(),  COLORS.ScrollbarGrabActive)
   reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Text(),                 COLORS.TextPrimary)
+  reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Border(),                0x00000000)
 
   reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_WindowPadding(), 2.0, 2.0)
-  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_WindowRounding(),0.0)
-  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ChildRounding(), 0.0)
-  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_FrameRounding(), 3.0)
-  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ItemSpacing(),   4.0, 4.0)
+  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_WindowRounding(), 0.0)
+  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ChildRounding(),  0.0)
+  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_FrameRounding(),  3.0)
+  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ItemSpacing(),    4.0, 4.0)
+  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_WindowBorderSize(), 0.0)
+  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ChildBorderSize(),  0.0)
 end
 
 function UITheme.pop_theme(ctx)
-  reaper.ImGui_PopStyleVar(ctx, 5)
-  reaper.ImGui_PopStyleColor(ctx, 19)
+  reaper.ImGui_PopStyleVar(ctx, 7)
+  reaper.ImGui_PopStyleColor(ctx, 21)
 end
 
 function UITheme.get_badge_color(p_type)
