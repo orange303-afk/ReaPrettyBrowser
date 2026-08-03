@@ -289,6 +289,55 @@ local function paste_thumbnail_from_clipboard(plugin, state)
   end
 end
 
+-- Search for plugin thumbnail image on Google/web and save automatically
+local function search_google_thumbnail(plugin, state)
+  if not plugin then return end
+
+  local home = os.getenv("HOME") or os.getenv("USERPROFILE") or ""
+  local thumb_dir = home .. "/Documents/Reaper/Thumbnails"
+  
+  local safe_vendor = (plugin.vendor or "Unknown"):gsub("[%s%p]", "_")
+  local safe_name = (plugin.name or "Plugin"):gsub("[%s%p]", "_")
+  local dest_path = thumb_dir .. "/" .. safe_vendor .. "_" .. safe_name .. ".png"
+
+  local script_py = reaper.GetResourcePath() .. "/Scripts/ReaPrettyBrowser_download_google.py"
+  if not file_exists(script_py) then
+    script_py = "/Users/ilyaorange/Documents/ReaPrettyBrowser/modules/download_google_thumbnail.py"
+  end
+
+  local p_name = plugin.name or ""
+  local p_vendor = plugin.vendor or "Unknown"
+
+  local cmd = string.format('python3 "%s" "%s" "%s" "%s"', script_py, p_name:gsub('"', '\\"'), p_vendor:gsub('"', '\\"'), dest_path:gsub('"', '\\"'))
+
+  local handle = io.popen(cmd)
+  local result = handle and handle:read("*a") or ""
+  if handle then handle:close() end
+
+  result = result:match("^%s*(.-)%s*$")
+
+  if (result == "SUCCESS" or file_exists(dest_path)) and file_exists(dest_path) then
+    Config.save_custom_thumbnail(plugin.ident, dest_path)
+    if plugin.uid then Config.save_custom_thumbnail(plugin.uid, dest_path) end
+    if plugin.full_name then Config.save_custom_thumbnail(plugin.full_name, dest_path) end
+    
+    plugin.snapshot_path = dest_path
+    
+    if state and state.plugins then
+      for _, item in ipairs(state.plugins) do
+        if item.ident == plugin.ident or item.uid == plugin.uid or item.full_name == plugin.full_name then
+          item.snapshot_path = dest_path
+        end
+      end
+    end
+
+    TextureManager.reset()
+  else
+    state.google_search_error_plugin = plugin
+    state.trigger_open_no_google_img_popup = true
+  end
+end
+
 -- Open folder in OS File Explorer / Finder
 local function open_in_explorer(folder_path)
   if not folder_path or folder_path == "" then return end
@@ -884,6 +933,10 @@ function UIViews.draw_plugin_grid(ctx, state)
             paste_thumbnail_from_clipboard(plugin, state)
           end
 
+          if reaper.ImGui_MenuItem(ctx, "🌐 Find thumbnail on Google...") then
+            search_google_thumbnail(plugin, state)
+          end
+
           -- Submenu for Add to Category
           local add_cat_label = (count > 1) and string.format("🏷️ Add to Category (%d selected)", count) or "🏷️ Add to Category"
           if reaper.ImGui_BeginMenu(ctx, add_cat_label) then
@@ -1217,6 +1270,27 @@ function UIViews.draw_plugin_grid(ctx, state)
       reaper.ImGui_Separator(ctx)
       reaper.ImGui_Text(ctx, "There is no valid image currently in your system clipboard.")
       reaper.ImGui_Text(ctx, "Copy an image or take a screenshot first, then try again.")
+      reaper.ImGui_Separator(ctx)
+
+      if reaper.ImGui_Button(ctx, "OK") then
+        reaper.ImGui_CloseCurrentPopup(ctx)
+      end
+      reaper.ImGui_EndPopup(ctx)
+    end
+
+    if state.trigger_open_no_google_img_popup then
+      state.trigger_open_no_google_img_popup = nil
+      reaper.ImGui_OpenPopup(ctx, "NoGoogleImageModal")
+    end
+
+    -- No Google Image Alert Popup Modal
+    if reaper.ImGui_BeginPopup(ctx, "NoGoogleImageModal") then
+      reaper.ImGui_TextColored(ctx, UITheme.COLORS.AccentCyan, "No Image Found on Google")
+      reaper.ImGui_Separator(ctx)
+      local p = state.google_search_error_plugin
+      local name = p and (p.name or "this plugin") or "this plugin"
+      reaper.ImGui_Text(ctx, "Could not automatically find or download a thumbnail for " .. name .. ".")
+      reaper.ImGui_Text(ctx, "Try using 'Screenshot open plugin GUI' or 'Paste thumbnail from clipboard'.")
       reaper.ImGui_Separator(ctx)
 
       if reaper.ImGui_Button(ctx, "OK") then

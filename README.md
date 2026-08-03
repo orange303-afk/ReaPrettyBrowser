@@ -57,6 +57,7 @@
   - `config.lua`: ExtState storage, category management, export & import settings.
   - `capture_plugin_gui.py`: Win32 / macOS window rectangle screenshot engine.
   - `save_clipboard_image.py`: Win32 / macOS clipboard image extractor.
+  - `download_google_thumbnail.py`: Automatic web/Google image search & thumbnail retriever.
 
 ---
 
