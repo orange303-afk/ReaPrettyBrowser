@@ -1315,45 +1315,44 @@ function UIViews.draw_plugin_grid(ctx, state)
       reaper.ImGui_Separator(ctx)
       reaper.ImGui_Spacing(ctx)
 
-      local cols = 3
-      local item_w = 210
-      local item_h = 130
+      local cols = 2
+      local item_w = 220
+      local item_h = 135
       local selected_path = nil
 
-      for i, cand_path in ipairs(cands) do
-        reaper.ImGui_PushID(ctx, "cand_img_" .. i)
-        
-        local texture = TextureManager.get_texture(ctx, cand_path)
-        if texture then
-          local avail_w = item_w
-          local avail_h = item_h
-          
-          reaper.ImGui_Image(ctx, texture, avail_w, avail_h)
-          local is_hovered = reaper.ImGui_IsItemHovered(ctx)
-          
-          if is_hovered then
-            local draw_list = reaper.ImGui_GetWindowDrawList(ctx)
-            local min_x, min_y = reaper.ImGui_GetItemRectMin(ctx)
-            local max_x, max_y = reaper.ImGui_GetItemRectMax(ctx)
-            reaper.ImGui_DrawList_AddRect(draw_list, min_x - 2, min_y - 2, max_x + 2, max_y + 2, UITheme.COLORS.AccentCyan, 4.0, nil, 2.0)
+      if reaper.ImGui_BeginTable(ctx, "CandGridTable", cols, reaper.ImGui_TableFlags_SizingFixedFit()) then
+        for i, cand_path in ipairs(cands) do
+          reaper.ImGui_TableNextColumn(ctx)
+          reaper.ImGui_PushID(ctx, "cand_cell_" .. i)
+
+          local texture = TextureManager.get_texture(ctx, cand_path)
+          if texture then
+            reaper.ImGui_BeginGroup(ctx)
+
+            reaper.ImGui_Image(ctx, texture, item_w, item_h)
+            local is_hovered = reaper.ImGui_IsItemHovered(ctx)
             
-            if reaper.ImGui_IsMouseDoubleClicked(ctx, 0) then
+            if is_hovered then
+              local draw_list = reaper.ImGui_GetWindowDrawList(ctx)
+              local min_x, min_y = reaper.ImGui_GetItemRectMin(ctx)
+              local max_x, max_y = reaper.ImGui_GetItemRectMax(ctx)
+              reaper.ImGui_DrawList_AddRect(draw_list, min_x - 2, min_y - 2, max_x + 2, max_y + 2, UITheme.COLORS.AccentCyan, 4.0, nil, 2.0)
+              
+              if reaper.ImGui_IsMouseDoubleClicked(ctx, 0) then
+                selected_path = cand_path
+              end
+            end
+
+            if reaper.ImGui_Button(ctx, string.format("Select Candidate #%d", i), item_w, 0) then
               selected_path = cand_path
             end
+
+            reaper.ImGui_EndGroup(ctx)
           end
 
-          if reaper.ImGui_Button(ctx, string.format("Select Candidate #%d", i), item_w, 0) then
-            selected_path = cand_path
-          end
+          reaper.ImGui_PopID(ctx)
         end
-
-        reaper.ImGui_PopID(ctx)
-
-        if i % cols ~= 0 and i < #cands then
-          reaper.ImGui_SameLine(ctx, 0, 15)
-        else
-          reaper.ImGui_Spacing(ctx)
-        end
+        reaper.ImGui_EndTable(ctx)
       end
 
       if selected_path and p then

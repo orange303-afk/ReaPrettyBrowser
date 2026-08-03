@@ -7,6 +7,19 @@ import urllib.parse
 import subprocess
 import platform
 
+def clean_plugin_title(raw_name):
+    if not raw_name:
+        return ""
+    # Strip format prefixes e.g. VST3:, VST:, AU:, CLAP:
+    name = re.sub(r"^(?:VST3|VST|AU|CLAP):\s*", "", raw_name, flags=re.IGNORECASE)
+    # Strip parenthetical tags e.g. (Waves), (Mono), (Stereo), (m/s), (x64)
+    name = re.sub(r"\([^)]*\)", "", name)
+    # Strip channel specifiers like 5.0, 5.1, 7.1, m/s, mono, stereo, x64, x86
+    name = re.sub(r"\b(?:5\.1|5\.0|7\.1|m/s|m->s|s->s|mono|stereo|x64|x86)\b", "", name, flags=re.IGNORECASE)
+    # Normalize multiple whitespace
+    name = re.sub(r"\s+", " ", name).strip()
+    return name
+
 def trim_solid_borders(dest_path):
     if not os.path.exists(dest_path):
         return
@@ -82,7 +95,7 @@ def trim_solid_borders(dest_path):
 def search_candidate_urls(plugin_name, vendor):
     query_terms = []
     clean_vendor = vendor if (vendor and vendor != "Unknown") else ""
-    clean_name = plugin_name or ""
+    clean_name = clean_plugin_title(plugin_name)
 
     if clean_vendor:
         query_terms.append(clean_vendor)
@@ -239,7 +252,7 @@ def search_all_candidates_json(plugin_name, vendor, out_dir):
         if download_and_convert(img_url, dest_path):
             results.append({"id": idx, "path": dest_path, "url": img_url})
             idx += 1
-            if idx > 6: # limit to top 6 preview candidates
+            if idx > 6:
                 break
 
     print(json.dumps(results))
