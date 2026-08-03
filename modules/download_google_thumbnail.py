@@ -79,9 +79,8 @@ def trim_solid_borders(dest_path):
         except Exception:
             pass
 
-def search_and_download_image(plugin_name, vendor, dest_path):
+def search_candidate_urls(plugin_name, vendor):
     query_terms = []
-    
     clean_vendor = vendor if (vendor and vendor != "Unknown") else ""
     clean_name = plugin_name or ""
 
@@ -104,7 +103,6 @@ def search_and_download_image(plugin_name, vendor, dest_path):
 
     raw_candidates = []
 
-    # 1. Primary search: DuckDuckGo Images
     try:
         url = "https://duckduckgo.com/?q=" + urllib.parse.quote(query)
         req = urllib.request.Request(url, headers=headers)
@@ -130,7 +128,6 @@ def search_and_download_image(plugin_name, vendor, dest_path):
     except Exception:
         pass
 
-    # 2. Fallback search: Google Images HTML
     if not raw_candidates:
         try:
             gurl = "https://www.google.com/search?q=" + urllib.parse.quote(query) + "&tbm=isch"
@@ -146,9 +143,8 @@ def search_and_download_image(plugin_name, vendor, dest_path):
             pass
 
     if not raw_candidates:
-        return "NO_IMAGE"
+        return []
 
-    # Strict filtering for clean full UI screenshots
     bad_keywords = [
         "youtube", "ytimg", "banner", "header", "boxshot", "bundle", "promo", "thumb",
         "logo", "cover", "sale", "discount", "reverb.com", "ebay", "sweetwater.com/store",
@@ -164,7 +160,6 @@ def search_and_download_image(plugin_name, vendor, dest_path):
         if any(bad in combined for bad in bad_keywords):
             continue
         score = sum(2 for good in good_keywords if good in combined)
-        # Give higher priority to png images (often transparent clean GUI renders)
         if ".png" in img_url.lower():
             score += 3
         filtered_candidates.append((score, img_url))
@@ -174,68 +169,95 @@ def search_and_download_image(plugin_name, vendor, dest_path):
     if not candidates:
         candidates = [url for url, _, _, _ in raw_candidates]
 
-    # Try downloading top candidates until one succeeds
+    return candidates
+
+def download_and_convert(img_url, dest_path):
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     tmp_file = dest_path + ".tmp"
+    try:
+        down_req = urllib.request.Request(img_url, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        })
+        with urllib.request.urlopen(down_req, timeout=6) as dresp:
+            raw_bytes = dresp.read()
+            if len(raw_bytes) < 3000:
+                return False
+            with open(tmp_file, "wb") as f:
+                f.write(raw_bytes)
 
-    for img_url in candidates[:8]:
+        converted = False
         try:
-            down_req = urllib.request.Request(img_url, headers={
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            })
-            with urllib.request.urlopen(down_req, timeout=7) as dresp:
-                raw_bytes = dresp.read()
-                if len(raw_bytes) < 3000: # ignore tiny files / broken downloads
-                    continue
-                with open(tmp_file, "wb") as f:
-                    f.write(raw_bytes)
-
-            converted = False
-            try:
-                from PIL import Image
-                import io
-                img = Image.open(tmp_file)
-                img.save(dest_path, "PNG")
-                converted = True
-            except Exception:
-                pass
-
-            if not converted:
-                if platform.system() == "Darwin":
-                    res = subprocess.run(["sips", "-s", "format", "png", tmp_file, "--out", dest_path], capture_output=True)
-                    if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
-                        converted = True
-                else:
-                    dest_win = dest_path.replace("/", "\\")
-                    tmp_win = tmp_file.replace("/", "\\")
-                    ps_cmd = f"""
-                    Add-Type -AssemblyName System.Drawing
-                    $img = [System.Drawing.Image]::FromFile('{tmp_win}')
-                    $img.Save('{dest_win}', [System.Drawing.Imaging.ImageFormat]::Png)
-                    $img.Dispose()
-                    """
-                    res = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd], capture_output=True)
-                    if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
-                        converted = True
-
-            if os.path.exists(tmp_file):
-                try: os.remove(tmp_file)
-                except Exception: pass
-
-            if converted and os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
-                # Trim solid background borders if present
-                trim_solid_borders(dest_path)
-                return "SUCCESS"
+            from PIL import Image
+            import io
+            img = Image.open(tmp_file)
+            img.save(dest_path, "PNG")
+            converted = True
         except Exception:
-            if os.path.exists(tmp_file):
-                try: os.remove(tmp_file)
-                except Exception: pass
-            continue
+            pass
 
+        if not converted:
+            if platform.system() == "Darwin":
+                res = subprocess.run(["sips", "-s", "format", "png", tmp_file, "--out", dest_path], capture_output=True)
+                if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
+                    converted = True
+            else:
+                dest_win = dest_path.replace("/", "\\")
+                tmp_win = tmp_file.replace("/", "\\")
+                ps_cmd = f"""
+                Add-Type -AssemblyName System.Drawing
+                $img = [System.Drawing.Image]::FromFile('{tmp_win}')
+                $img.Save('{dest_win}', [System.Drawing.Imaging.ImageFormat]::Png)
+                $img.Dispose()
+                """
+                res = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd], capture_output=True)
+                if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
+                    converted = True
+
+        if os.path.exists(tmp_file):
+            try: os.remove(tmp_file)
+            except Exception: pass
+
+        if converted and os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
+            trim_solid_borders(dest_path)
+            return True
+    except Exception:
+        if os.path.exists(tmp_file):
+            try: os.remove(tmp_file)
+            except Exception: pass
+        return False
+
+    return False
+
+def search_all_candidates_json(plugin_name, vendor, out_dir):
+    candidates = search_candidate_urls(plugin_name, vendor)
+    os.makedirs(out_dir, exist_ok=True)
+
+    results = []
+    idx = 1
+    for img_url in candidates:
+        dest_path = os.path.join(out_dir, f"cand_{idx}.png")
+        if download_and_convert(img_url, dest_path):
+            results.append({"id": idx, "path": dest_path, "url": img_url})
+            idx += 1
+            if idx > 6: # limit to top 6 preview candidates
+                break
+
+    print(json.dumps(results))
+
+def search_and_download_image(plugin_name, vendor, dest_path):
+    candidates = search_candidate_urls(plugin_name, vendor)
+    for img_url in candidates[:8]:
+        if download_and_convert(img_url, dest_path):
+            return "SUCCESS"
     return "NO_IMAGE"
 
 if __name__ == "__main__":
-    if len(sys.argv) > 3:
+    if len(sys.argv) > 3 and sys.argv[3] == "--search-all":
+        p_name = sys.argv[1]
+        p_vendor = sys.argv[2]
+        out_dir = sys.argv[4] if len(sys.argv) > 4 else "/tmp/reapretty_candidates"
+        search_all_candidates_json(p_name, p_vendor, out_dir)
+    elif len(sys.argv) > 3:
         p_name = sys.argv[1]
         p_vendor = sys.argv[2]
         out_file = sys.argv[3]

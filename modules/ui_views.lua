@@ -289,17 +289,13 @@ local function paste_thumbnail_from_clipboard(plugin, state)
   end
 end
 
--- Search for plugin thumbnail image on Google/web and save automatically
+-- Search for plugin thumbnail images on Google/web and open candidate selection modal
 local function search_google_thumbnail(plugin, state)
   if not plugin then return end
 
   local home = os.getenv("HOME") or os.getenv("USERPROFILE") or ""
-  local thumb_dir = home .. "/Documents/Reaper/Thumbnails"
+  local cand_dir = home .. "/Documents/Reaper/Thumbnails/Candidates"
   
-  local safe_vendor = (plugin.vendor or "Unknown"):gsub("[%s%p]", "_")
-  local safe_name = (plugin.name or "Plugin"):gsub("[%s%p]", "_")
-  local dest_path = thumb_dir .. "/" .. safe_vendor .. "_" .. safe_name .. ".png"
-
   local script_py = reaper.GetResourcePath() .. "/Scripts/ReaPrettyBrowser_download_google.py"
   if not file_exists(script_py) then
     script_py = "/Users/ilyaorange/Documents/ReaPrettyBrowser/modules/download_google_thumbnail.py"
@@ -308,29 +304,25 @@ local function search_google_thumbnail(plugin, state)
   local p_name = plugin.name or ""
   local p_vendor = plugin.vendor or "Unknown"
 
-  local cmd = string.format('python3 "%s" "%s" "%s" "%s"', script_py, p_name:gsub('"', '\\"'), p_vendor:gsub('"', '\\"'), dest_path:gsub('"', '\\"'))
+  local cmd = string.format('python3 "%s" "%s" "%s" --search-all "%s"', 
+    script_py, p_name:gsub('"', '\\"'), p_vendor:gsub('"', '\\"'), cand_dir:gsub('"', '\\"'))
 
   local handle = io.popen(cmd)
   local result = handle and handle:read("*a") or ""
   if handle then handle:close() end
 
-  result = result:match("^%s*(.-)%s*$")
-
-  if (result == "SUCCESS" or file_exists(dest_path)) and file_exists(dest_path) then
-    Config.save_custom_thumbnail(plugin.ident, dest_path)
-    if plugin.uid then Config.save_custom_thumbnail(plugin.uid, dest_path) end
-    if plugin.full_name then Config.save_custom_thumbnail(plugin.full_name, dest_path) end
-    
-    plugin.snapshot_path = dest_path
-    
-    if state and state.plugins then
-      for _, item in ipairs(state.plugins) do
-        if item.ident == plugin.ident or item.uid == plugin.uid or item.full_name == plugin.full_name then
-          item.snapshot_path = dest_path
-        end
-      end
+  -- Parse JSON candidate list from stdout: [{"id":1, "path":"..."}, ...]
+  local candidates = {}
+  for item_path in result:gmatch('"path"%s*:%s*"([^"]+)"') do
+    if file_exists(item_path) then
+      table.insert(candidates, item_path)
     end
+  end
 
+  if #candidates > 0 then
+    state.google_search_candidates = candidates
+    state.google_search_target_plugin = plugin
+    state.trigger_open_google_preview_modal = true
     TextureManager.reset()
   else
     state.google_search_error_plugin = plugin
@@ -1296,6 +1288,113 @@ function UIViews.draw_plugin_grid(ctx, state)
       if reaper.ImGui_Button(ctx, "OK") then
         reaper.ImGui_CloseCurrentPopup(ctx)
       end
+      reaper.ImGui_EndPopup(ctx)
+    end
+
+    if state.trigger_open_google_preview_modal then
+      state.trigger_open_google_preview_modal = nil
+      reaper.ImGui_OpenPopup(ctx, "SelectGoogleImageModal")
+    end
+
+    -- Candidate Image Selection Modal
+    if reaper.ImGui_BeginPopupModal(ctx, "SelectGoogleImageModal", true, reaper.ImGui_WindowFlags_AlwaysAutoResize()) then
+      local p = state.google_search_target_plugin
+      local cands = state.google_search_candidates or {}
+
+      reaper.ImGui_TextColored(ctx, UITheme.COLORS.AccentCyan, "🌐 Select Best Thumbnail")
+      if p then
+        reaper.ImGui_Text(ctx, "Plugin: " .. (p.name or "") .. " (" .. (p.vendor or "Unknown") .. ")")
+      end
+      reaper.ImGui_Text(ctx, "Double-click any candidate image below to select and assign it to this plugin:")
+      reaper.ImGui_Separator(ctx)
+      reaper.ImGui_Spacing(ctx)
+
+      local cols = 3
+      local item_w = 210
+      local item_h = 130
+      local selected_path = nil
+
+      for i, cand_path in ipairs(cands) do
+        reaper.ImGui_PushID(ctx, "cand_img_" .. i)
+        
+        local texture = TextureManager.get_texture(ctx, cand_path)
+        if texture then
+          local avail_w = item_w
+          local avail_h = item_h
+          
+          reaper.ImGui_Image(ctx, texture, avail_w, avail_h)
+          local is_hovered = reaper.ImGui_IsItemHovered(ctx)
+          
+          if is_hovered then
+            local draw_list = reaper.ImGui_GetWindowDrawList(ctx)
+            local min_x, min_y = reaper.ImGui_GetItemRectMin(ctx)
+            local max_x, max_y = reaper.ImGui_GetItemRectMax(ctx)
+            reaper.ImGui_DrawList_AddRect(draw_list, min_x - 2, min_y - 2, max_x + 2, max_y + 2, UITheme.COLORS.AccentCyan, 4.0, nil, 2.0)
+            
+            if reaper.ImGui_IsMouseDoubleClicked(ctx, 0) then
+              selected_path = cand_path
+            end
+          end
+
+          if reaper.ImGui_Button(ctx, string.format("Select Candidate #%d", i), item_w, 0) then
+            selected_path = cand_path
+          end
+        end
+
+        reaper.ImGui_PopID(ctx)
+
+        if i % cols ~= 0 and i < #cands then
+          reaper.ImGui_SameLine(ctx, 0, 15)
+        else
+          reaper.ImGui_Spacing(ctx)
+        end
+      end
+
+      if selected_path and p then
+        local home = os.getenv("HOME") or os.getenv("USERPROFILE") or ""
+        local thumb_dir = home .. "/Documents/Reaper/Thumbnails"
+        local safe_vendor = (p.vendor or "Unknown"):gsub("[%s%p]", "_")
+        local safe_name = (p.name or "Plugin"):gsub("[%s%p]", "_")
+        local dest_path = thumb_dir .. "/" .. safe_vendor .. "_" .. safe_name .. ".png"
+
+        local infile = io.open(selected_path, "rb")
+        if infile then
+          local data = infile:read("*a")
+          infile:close()
+          os.execute(string.format('mkdir -p "%s"', thumb_dir))
+          local outfile = io.open(dest_path, "wb")
+          if outfile then
+            outfile:write(data)
+            outfile:close()
+          end
+        end
+
+        if file_exists(dest_path) then
+          Config.save_custom_thumbnail(p.ident, dest_path)
+          if p.uid then Config.save_custom_thumbnail(p.uid, dest_path) end
+          if p.full_name then Config.save_custom_thumbnail(p.full_name, dest_path) end
+          p.snapshot_path = dest_path
+
+          if state and state.plugins then
+            for _, item in ipairs(state.plugins) do
+              if item.ident == p.ident or item.uid == p.uid or item.full_name == p.full_name then
+                item.snapshot_path = dest_path
+              end
+            end
+          end
+        end
+
+        TextureManager.reset()
+        reaper.ImGui_CloseCurrentPopup(ctx)
+      end
+
+      reaper.ImGui_Separator(ctx)
+      reaper.ImGui_Spacing(ctx)
+
+      if reaper.ImGui_Button(ctx, "Cancel", 120, 0) then
+        reaper.ImGui_CloseCurrentPopup(ctx)
+      end
+
       reaper.ImGui_EndPopup(ctx)
     end
 
