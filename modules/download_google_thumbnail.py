@@ -7,6 +7,78 @@ import urllib.parse
 import subprocess
 import platform
 
+def trim_solid_borders(dest_path):
+    if not os.path.exists(dest_path):
+        return
+    if platform.system() == "Darwin":
+        try:
+            from AppKit import NSImage, NSBitmapImageRep, NSPNGFileType, NSGraphicsContext, NSMakeRect
+            image = NSImage.alloc().initWithContentsOfFile_(dest_path)
+            if not image:
+                return
+            rep = NSBitmapImageRep.imageRepWithData_(image.TIFFRepresentation())
+            if not rep:
+                return
+
+            width = rep.pixelsWide()
+            height = rep.pixelsHigh()
+            if width < 100 or height < 100:
+                return
+
+            corner = rep.colorAtX_y_(0, 0)
+            if not corner:
+                return
+            cr, cg, cb, ca = corner.redComponent(), corner.greenComponent(), corner.blueComponent(), corner.alphaComponent()
+
+            is_bg = (ca < 0.1) or (cr > 0.95 and cg > 0.95 and cb > 0.95) or (cr < 0.05 and cg < 0.05 and cb < 0.05)
+            if not is_bg:
+                return
+
+            def is_same_bg(x, y):
+                c = rep.colorAtX_y_(x, y)
+                if not c:
+                    return True
+                if ca < 0.1:
+                    return c.alphaComponent() < 0.1
+                r, g, b = c.redComponent(), c.greenComponent(), c.blueComponent()
+                return abs(r - cr) < 0.04 and abs(g - cg) < 0.04 and abs(b - cb) < 0.04
+
+            top, bottom, left, right = 0, height - 1, 0, width - 1
+
+            step_x = max(1, width // 80)
+            step_y = max(1, height // 80)
+
+            while top < height - 1 and all(is_same_bg(x, top) for x in range(0, width, step_x)):
+                top += 1
+            while bottom > top and all(is_same_bg(x, bottom) for x in range(0, width, step_x)):
+                bottom -= 1
+            while left < width - 1 and all(is_same_bg(left, y) for y in range(top, bottom, step_y)):
+                left += 1
+            while right > left and all(is_same_bg(right, y) for y in range(top, bottom, step_y)):
+                right -= 1
+
+            crop_w = right - left + 1
+            crop_h = bottom - top + 1
+
+            if crop_w > width * 0.5 and crop_h > height * 0.5 and (left > 4 or top > 4 or right < width - 5 or bottom < height - 5):
+                cropped_rep = NSBitmapImageRep.alloc().initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel_(
+                    None, crop_w, crop_h, 8, 4, True, False, "NSCalibratedRGBColorSpace", 0, 0
+                )
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.setCurrentContext_(NSGraphicsContext.graphicsContextWithBitmapImageRep_(cropped_rep))
+                rep.drawInRect_fromRect_operation_fraction_respectFlipped_hints_(
+                    NSMakeRect(0, 0, crop_w, crop_h),
+                    NSMakeRect(left, height - bottom - 1, crop_w, crop_h),
+                    1, 1.0, True, None
+                )
+                NSGraphicsContext.restoreGraphicsState()
+
+                png_data = cropped_rep.representationUsingType_properties_(NSPNGFileType, None)
+                if png_data:
+                    png_data.writeToFile_atomically_(dest_path, True)
+        except Exception:
+            pass
+
 def search_and_download_image(plugin_name, vendor, dest_path):
     query_terms = []
     
@@ -22,7 +94,7 @@ def search_and_download_image(plugin_name, vendor, dest_path):
     else:
         query_terms.append(clean_name)
 
-    query_terms.append("VST plugin GUI screenshot interface")
+    query_terms.append("VST plugin full GUI screenshot interface clean -youtube -banner -promo -boxshot")
     query = " ".join(query_terms)
 
     headers = {
@@ -51,8 +123,10 @@ def search_and_download_image(plugin_name, vendor, dest_path):
                     title = item.get("title", "")
                     w = item.get("width", 0)
                     h = item.get("height", 0)
-                    if img_url and (w == 0 or w >= 250) and (h == 0 or h >= 180):
-                        raw_candidates.append((img_url, title))
+                    if img_url and w > 0 and h > 0:
+                        aspect = w / h
+                        if 0.75 <= aspect <= 2.45 and w >= 300 and h >= 220:
+                            raw_candidates.append((img_url, title, w, h))
     except Exception:
         pass
 
@@ -67,32 +141,38 @@ def search_and_download_image(plugin_name, vendor, dest_path):
             found_urls = re.findall(r'["\'](https?://[^"\']+\.(?:png|jpg|jpeg|webp))["\']', ghtml, re.IGNORECASE)
             for furl in found_urls:
                 if "gstatic" not in furl and "google" not in furl:
-                    raw_candidates.append((furl, ""))
+                    raw_candidates.append((furl, "", 800, 500))
         except Exception:
             pass
 
     if not raw_candidates:
         return "NO_IMAGE"
 
-    # Filter out hardware photo listings and sort candidates favoring software UI screenshots
-    bad_keywords = ["reverb.com", "ebay", "sweetwater.com/store", "thomann", "used-gear", "hardware-rack", "rackunit", "photo-rack", "gear-photo"]
-    good_keywords = ["plugin", "vst", "gui", "screenshot", "software", "interface", "preset", "review", "uad", "audio"]
+    # Strict filtering for clean full UI screenshots
+    bad_keywords = [
+        "youtube", "ytimg", "banner", "header", "boxshot", "bundle", "promo", "thumb",
+        "logo", "cover", "sale", "discount", "reverb.com", "ebay", "sweetwater.com/store",
+        "thomann", "used-gear", "hardware-rack", "rackunit", "photo-rack", "gear-photo",
+        "maxresdefault", "hqdefault", "sddefault"
+    ]
+    good_keywords = ["plugin", "vst", "gui", "screenshot", "software", "interface", "full", "clean", "uad", "audio"]
 
     filtered_candidates = []
 
-    for img_url, title in raw_candidates:
+    for img_url, title, w, h in raw_candidates:
         combined = (img_url + " " + title).lower()
         if any(bad in combined for bad in bad_keywords):
             continue
-        score = sum(1 for good in good_keywords if good in combined)
+        score = sum(2 for good in good_keywords if good in combined)
+        # Give higher priority to png images (often transparent clean GUI renders)
+        if ".png" in img_url.lower():
+            score += 3
         filtered_candidates.append((score, img_url))
 
-    # Sort candidates by score descending
     filtered_candidates.sort(key=lambda x: x[0], reverse=True)
-
     candidates = [url for _, url in filtered_candidates]
     if not candidates:
-        candidates = [url for url, _ in raw_candidates]
+        candidates = [url for url, _, _, _ in raw_candidates]
 
     # Try downloading top candidates until one succeeds
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
@@ -110,7 +190,6 @@ def search_and_download_image(plugin_name, vendor, dest_path):
                 with open(tmp_file, "wb") as f:
                     f.write(raw_bytes)
 
-            # Convert downloaded image to PNG format
             converted = False
             try:
                 from PIL import Image
@@ -144,6 +223,8 @@ def search_and_download_image(plugin_name, vendor, dest_path):
                 except Exception: pass
 
             if converted and os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
+                # Trim solid background borders if present
+                trim_solid_borders(dest_path)
                 return "SUCCESS"
         except Exception:
             if os.path.exists(tmp_file):
