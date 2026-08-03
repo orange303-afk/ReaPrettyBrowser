@@ -1293,10 +1293,16 @@ function UIViews.draw_plugin_grid(ctx, state)
 
     if state.trigger_open_google_preview_modal then
       state.trigger_open_google_preview_modal = nil
+      local mx, my = reaper.ImGui_GetMousePos(ctx)
+      state.google_modal_pos_x = mx
+      state.google_modal_pos_y = my
       reaper.ImGui_OpenPopup(ctx, "SelectGoogleImageModal")
     end
 
     -- Candidate Image Selection Modal
+    if state.google_modal_pos_x and state.google_modal_pos_y then
+      reaper.ImGui_SetNextWindowPos(ctx, state.google_modal_pos_x, state.google_modal_pos_y, reaper.ImGui_Cond_Appearing(), 0.5, 0.5)
+    end
     if reaper.ImGui_BeginPopupModal(ctx, "SelectGoogleImageModal", true, reaper.ImGui_WindowFlags_AlwaysAutoResize()) then
       local p = state.google_search_target_plugin
       local cands = state.google_search_candidates or {}
