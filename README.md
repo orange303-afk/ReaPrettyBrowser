@@ -1,32 +1,32 @@
-# ReaPrettyBrowser - Visual Plugin Browser for REAPER 🎛️✨
+# ReaPrettyBrowser - Visual Plugin Browser for REAPER
 
 **ReaPrettyBrowser** is a modern, visual **FX Plugin Browser** script for **Cockos REAPER** built with **ReaImGui**. It automatically scans REAPER's plugin database, imports VST/AU/CLAP snapshots/thumbnails, supports category submenus, drag-and-drop to tracks, instrument slot-0 positioning, clipboard thumbnail pasting, targeted plugin GUI screenshots, settings backup/restore, and full cross-platform support for **macOS & Windows**.
 
 ---
 
-## 🌟 Features
+## Features
 
-- 🖼️ **Responsive Single-Column Grid**: Auto-scaling cards that fill 100% of docker width as you resize REAPER panels.
-- 🏷️ **Multi-Category Assignment Submenu**: Assign multiple categories to plugins with instant `✓` checkboxes and 1-click toggling.
-- 📸 **Targeted Plugin GUI Screenshot**: Right-click -> `📸 Screenshot open plugin GUI...` captures ONLY the plugin interface window without REAPER background.
-- 📋 **Paste Clipboard Thumbnail**: Right-click -> `📋 Paste thumbnail from clipboard` converts any copied image into a plugin card preview.
-- 🎹 **Smart Instrument Placement**: Instrument VSTis are automatically instantiated in Slot 0 (first insert slot) on selected or newly created MIDI tracks.
-- 📁 **Custom Folder Browser & Settings Backup**: Browse for snapshot folders, and export/import all browser settings via `⚙️ Settings...`.
-- ⚡ **Lazy Texture Loading & Caching**: Efficient texture rendering prevents freeze or lag on large plugin collections.
-- 🔍 **Real-time Search & Filters**: Search by plugin name, vendor, or format instantly (`All`, `Favorites`, `VST3`, `VST`, `AU`, `CLAP`).
-- 🖱️ **Drag & Drop to Tracks**: Drag single or multiple selected plugins directly onto tracks or empty arrange space to create pre-configured tracks.
-- 🪟 **Cross-Platform**: 100% native support for **macOS & Windows**.
+- **Responsive Single-Column Grid**: Auto-scaling cards that fill 100% of docker width as you resize REAPER panels.
+- **Multi-Category Assignment Submenu**: Assign multiple categories to plugins with instant `✓` checkboxes and 1-click toggling.
+- **Targeted Plugin GUI Screenshot**: Right-click -> `Screenshot open plugin GUI...` captures ONLY the plugin interface window without REAPER background.
+- **Paste Clipboard Thumbnail**: Right-click -> `Paste thumbnail from clipboard` converts any copied image into a plugin card preview.
+- **Smart Instrument Placement**: Instrument VSTis are automatically instantiated in Slot 0 (first insert slot) on selected or newly created MIDI tracks.
+- **Custom Folder Browser & Settings Backup**: Browse for snapshot folders, and export/import all browser settings via `Settings...`.
+- **Lazy Texture Loading & Caching**: Efficient texture rendering prevents freeze or lag on large plugin collections.
+- **Real-time Search & Filters**: Search by plugin name, vendor, or format instantly (`All`, `Favorites`, `VST3`, `VST`, `AU`, `CLAP`).
+- **Drag & Drop to Tracks**: Drag single or multiple selected plugins directly onto tracks or empty arrange space to create pre-configured tracks.
+- **Cross-Platform**: 100% native support for **macOS & Windows**.
 
 ---
 
-## 📋 Requirements
+## Requirements
 
 - **Cockos REAPER** v6.0 or higher.
 - **ReaImGui extension** (Install via ReaPack: `Extensions -> ReaPack -> Browse packages -> search 'ReaImGui'`).
 
 ---
 
-## 🚀 Installation & Setup
+## Installation & Setup
 
 1. **Unzip Archive**:
    Extract `ReaPrettyBrowser_v1.0.zip`.
@@ -45,7 +45,7 @@
 
 ---
 
-## 📂 Included Package Structure
+## Included Package Structure
 
 - [`ReaPrettyBrowser.lua`](file:///Users/ilyaorange/Documents/ReaPrettyBrowser/ReaPrettyBrowser.lua): Main script & ReaImGui event loop.
 - `Thumbnails/`: 794 pre-made high-resolution plugin GUI snapshots.
@@ -60,10 +60,10 @@
 
 ---
 
-## 👨‍💻 Created By
+## Created By
 
 **Ilya Orange**
-- 🌐 [ilyaorange.gumroad.com](https://ilyaorange.gumroad.com)
-- 🎵 [ilyaorange.bandcamp.com](https://ilyaorange.bandcamp.com)
-- 🎶 [naukograd.bandcamp.com](https://naukograd.bandcamp.com)
-- ☕ Support: [paypal.me/ilyaorange303](https://paypal.com/paypalme/ilyaorange303)
+- Website: [ilyaorange.gumroad.com](https://ilyaorange.gumroad.com)
+- Bandcamp: [ilyaorange.bandcamp.com](https://ilyaorange.bandcamp.com)
+- Project: [naukograd.bandcamp.com](https://naukograd.bandcamp.com)
+- Support: [paypal.me/ilyaorange303](https://paypal.com/paypalme/ilyaorange303)
