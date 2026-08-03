@@ -2,6 +2,8 @@
 
 **ReaPrettyBrowser** is a modern, visual **FX Plugin Browser** script for **Cockos REAPER** built with **ReaImGui**. It automatically scans REAPER's plugin database, imports VST/AU/CLAP snapshots/thumbnails, supports category submenus, drag-and-drop to tracks, instrument slot-0 positioning, clipboard thumbnail pasting, targeted plugin GUI screenshots, settings backup/restore, and full cross-platform support for **macOS & Windows**.
 
+![Uploading image.png…]()
+
 ---
 
 ## Features
